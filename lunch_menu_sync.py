@@ -332,18 +332,35 @@ class LunchMenuSyncer:
             # Rate limiting for Google Calendar API
             time.sleep(1)
             
-            events_result = self.calendar_service.events().list(
-                calendarId=self.calendar_id,
-                timeMin=f"{start_date.isoformat()}Z",
-                timeMax=f"{end_date.isoformat()}Z",
-                singleEvents=True,
-                orderBy='startTime'
-            ).execute()
+            self.logger.debug(f"Fetching existing events from {start_date.isoformat()}Z to {end_date.isoformat()}Z")
             
-            events = events_result.get('items', [])
+            # Handle pagination to get all events
+            all_events = []
+            page_token = None
+            
+            while True:
+                events_result = self.calendar_service.events().list(
+                    calendarId=self.calendar_id,
+                    timeMin=f"{start_date.isoformat()}Z",
+                    timeMax=f"{end_date.isoformat()}Z",
+                    singleEvents=True,
+                    orderBy='startTime',
+                    pageToken=page_token
+                ).execute()
+                
+                events = events_result.get('items', [])
+                all_events.extend(events)
+                
+                page_token = events_result.get('nextPageToken')
+                if not page_token:
+                    break
+                    
+                self.logger.debug(f"Fetching next page of events (token: {page_token[:20]}...)")
+            
+            self.logger.debug(f"Total events fetched from Google Calendar: {len(all_events)}")
             frhl_events = {}
             
-            for event in events:
+            for event in all_events:
                 summary = event.get('summary', '')
                 if summary.startswith(self.EVENT_PREFIX):
                     # Extract date from event
@@ -480,8 +497,12 @@ class LunchMenuSyncer:
         start_date = min(menu[0] for menu in menus)
         end_date = max(menu[0] for menu in menus) + timedelta(days=1)
         
+        self.logger.debug(f"Syncing calendar events from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        self.logger.debug(f"Total menus to sync: {len(menus)}")
+        
         # Get existing FRHL events
         existing_events = self._get_existing_frhl_events(start_date, end_date)
+        self.logger.debug(f"Found {len(existing_events)} existing FRHL events in date range")
         
         stats = {'added': 0, 'updated': 0, 'skipped': 0, 'errors': 0}
         
