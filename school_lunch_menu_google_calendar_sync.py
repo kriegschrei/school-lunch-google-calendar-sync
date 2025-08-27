@@ -594,10 +594,7 @@ class FDMealPlannerParser(MenuParser):
         # Extract names from best items
         menu_names = []
         for item in best_items:
-            english_name = item.get('componentEnglishName', '').strip()
-            component_name = item.get('componentName', '').strip()
-            
-            name_to_use = english_name if english_name else component_name
+            name_to_use = self._get_preferred_name(item, logger)
             if name_to_use:
                 cleaned_name = self._apply_text_replacements(name_to_use)
                 menu_names.append(cleaned_name)
