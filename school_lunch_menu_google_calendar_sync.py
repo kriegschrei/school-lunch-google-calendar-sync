@@ -141,7 +141,7 @@ class MenuParser(ABC):
         
         return result.strip()
     
-    def _get_preferred_name(self, item: Dict, default_name: str = "Unknown Item") -> str:
+    def _get_preferred_name(self, item: Dict, logger: logging.Logger, default_name: str = "Unknown Item") -> str:
         """
         Get the preferred name from a menu item, preferring englishAlternateName over componentName.
         
@@ -153,7 +153,9 @@ class MenuParser(ABC):
             Preferred name string
         """
         english_name = item.get('englishAlternateName', '').strip()
+        logger.debug(f"english_name: {english_name}")
         component_name = item.get('componentName', '').strip()
+        logger.debug(f"component_name: {component_name}")
         
         # Prefer englishAlternateName if it exists and is not "N/A"
         if english_name and english_name.lower() != 'n/a':
@@ -659,7 +661,7 @@ class FDMealPlannerParser(MenuParser):
             
             for item in items:
                 # Get preferred item name
-                item_name = self._get_preferred_name(item)
+                item_name = self._get_preferred_name(item, logger, default_name="Unknown Item")
                 
                 if item_name:
                     cleaned_item_name = self._apply_text_replacements(item_name)
@@ -670,7 +672,7 @@ class FDMealPlannerParser(MenuParser):
                     if component_id in child_items:
                         for child in child_items[component_id]:
                             # Get preferred child item name
-                            child_name = self._get_preferred_name(child)
+                            child_name = self._get_preferred_name(child, logger, default_name="Unknown Item")
                             
                             if child_name:
                                 cleaned_child_name = self._apply_text_replacements(child_name)
