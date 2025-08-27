@@ -1,0 +1,9 @@
+# Elementary School Menu Sync Configuration
+# Copy this file to .elementary_env and update with your actual values
+
+CALENDAR_ID="YOUR_CALENDAR_ID_HERE"
+BASE_URL="https://justadashcatering.api.nutrislice.com/menu/api/weeks/school/lagrange-sd-102/menu-type/park-junior-high"
+EVENT_PREFIX="FR: "
+EVENT_COLOR="grape"
+MAX_WEEKS=4
+REPLACE_WG="--replace-wg"  # Remove WG (Whole Grain) abbreviations from menu items

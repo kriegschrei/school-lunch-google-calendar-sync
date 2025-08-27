@@ -1,312 +1,512 @@
-# Forest Road Lunch Menu to Google Calendar Sync
+# School Lunch Menu to Google Calendar Sync
 
-This Python script automatically scrapes the school lunch menu from the Forest Road cafeteria website and syncs it with your Google Family Calendar as all-day events.
+A flexible, general-purpose system for syncing lunch menus from various menu service APIs to Google Calendar. The system automatically detects the menu service type based on the URL and applies the appropriate parsing logic.
 
-## Features
+## 📚 Table of Contents
 
-- 🍎 Scrapes daily lunch menus from the school website
-- 📅 Syncs with Google Family Calendar as all-day events
-- 🔄 Automatically updates changed menus
-- 🏖️ Skips weekends to avoid unnecessary requests
-- 📊 Comprehensive logging with multiple levels
-- 🔄 Retry logic for network failures
-- ⏰ Designed for daily automated execution
+- [Features](#features)
+- [Supported Menu Services](#supported-menu-services)
+- [Installation](#installation)
+- [Security Configuration](#security-configuration)
+- [Usage](#usage)
+- [Enhanced Menu Features](#enhanced-menu-features)
+- [Configuration](#configuration)
+- [Deployment](#deployment)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
 
-## Requirements
+## 🎯 Features
 
-- Python 3.7 or higher
-- Google account with access to Google Calendar
-- Google Cloud Project with Calendar API enabled
+- **URL-based Parser Detection**: Automatically selects the correct parser based on the menu API URL
+- **Multiple Menu Sources**: Supports NutriSlice and FDMealPlanner APIs
+- **Flexible Configuration**: All parameters are configurable via command line or environment variables
+- **Calendar Color Management**: Named color mapping for Google Calendar event colors
+- **Detailed Menu Descriptions**: Includes full menu details in calendar event descriptions
+- **Global Configuration**: Centralized timeout, retry, and rate limiting settings
+- **Extensible Design**: Easy to add new menu service parsers
+- **Secure Configuration**: Environment files protect sensitive information
+- **Simple Wrapper Scripts**: Easy-to-use dedicated scripts for common configurations
 
-## Installation
+## 🍎 Supported Menu Services
 
-1. **Clone or download this repository**
-   ```bash
-   cd /path/to/your/directory
-   # Copy the files: lunch_menu_sync.py, requirements.txt, README.md
-   ```
+### NutriSlice
+- **URL Pattern**: `*.nutrislice.com`
+- **Data Source**: Weekly JSON API calls
+- **Menu Structure**: Simple food items with position-based sorting
+- **Example**: School district lunch menus
 
-2. **Install Python dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### FDMealPlanner  
+- **URL Pattern**: `*.fdmealplanner.com`
+- **Data Source**: Monthly JSON API calls
+- **Menu Structure**: Complex categorized items with parent-child relationships
+- **Required Parameters**: `account_id`, `location_id`, `meal_period_id`, `tenant_id`
+- **Example**: High school cafeteria menus
 
-## Google Calendar Setup
+## 📦 Installation
 
-### Step 1: Create a Google Cloud Project
-
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
-2. Click "Create Project" or select an existing project
-3. Note your project ID for later reference
-
-### Step 2: Enable the Google Calendar API
-
-1. In the Google Cloud Console, go to **APIs & Services > Library**
-2. Search for "Google Calendar API"
-3. Click on it and press **Enable**
-
-### Step 3: Create OAuth 2.0 Credentials
-
-1. Go to **APIs & Services > Credentials**
-2. Click **Create Credentials > OAuth client ID**
-3. If prompted, configure the OAuth consent screen:
-   - Choose **External** user type (unless you have a Google Workspace account)
-   - Fill in required fields:
-     - App name: "Lunch Menu Sync"
-     - User support email: your email
-     - Developer contact information: your email
-   - Add your email to test users
-   - Save and continue through the scopes and test users sections
-4. Choose **Desktop application** as the application type
-5. Name it "Lunch Menu Sync Client"
-6. Download the credentials JSON file
-7. Rename it to `credentials.json` and place it in the same directory as the script
-
-### Step 4: Get Your Calendar ID
-
-Your Family calendar ID is: `ZmFtaWx5MTQ0NTE1NDA2MTA5NzQ3Nzg3OTFAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ`
-
-(This was extracted from the URL you provided)
-
-### Step 5: Calendar Permissions
-
-Ensure your Google account has edit access to the Family calendar:
-
-1. Go to [Google Calendar](https://calendar.google.com)
-2. Find your "Family" calendar in the left sidebar
-3. Click the three dots next to it and select "Settings and sharing"
-4. Under "Share with specific people", make sure your account has "Make changes to events" permission or higher
-
-## Configuration
-
-### Environment Variables (Optional)
-
-You can set these environment variables to avoid command-line arguments:
-
+### 1. Clone the Repository
 ```bash
-export CALENDAR_ID="ZmFtaWx5MTQ0NTE1NDA2MTA5NzQ3Nzg3OTFAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ"
-export LUNCH_SYNC_LOG_LEVEL="INFO"
-export LUNCH_SYNC_LOG_DIR="/var/log/lunch-sync"
+git clone https://github.com/yourusername/D102-Lunch-Sync.git
+cd D102-Lunch-Sync
 ```
 
-## Usage
+### 2. Set Up Virtual Environment
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-### Basic Usage
+### 3. Set Up Google Calendar API
+1. Create a Google Cloud Project and enable Calendar API
+2. Follow the [Google Calendar API setup guide](https://developers.google.com/calendar/api/quickstart/python)
+3. Download `credentials.json` to the project directory
+4. Run the script once to generate `token.json`
+
+### 4. Configure Environment Files
+```bash
+# Copy example files and update with your values
+cp .elementary_env.example .elementary_env
+cp .highschool_env.example .highschool_env
+
+# Edit the files with your actual calendar ID and API parameters
+nano .elementary_env
+nano .highschool_env
+```
+
+## 🔒 Security Configuration
+
+### What We're Protecting
+
+**Sensitive Information:**
+- **Google Calendar ID**: Personal calendar identifier
+- **API URLs**: May contain school-specific identifiers  
+- **FDMealPlanner Parameters**: Account, location, meal period, and tenant IDs
+
+**Why This Matters:**
+- **Privacy**: Calendar IDs can reveal personal information
+- **Security**: API parameters might be considered internal/private
+- **Best Practice**: Never commit credentials or sensitive config to public repositories
+
+### Security Implementation
+
+#### Environment Files
+We use `.env` files to store sensitive configuration:
+
+```
+.elementary_env    # Elementary school configuration (git-ignored)
+.highschool_env    # High school configuration (git-ignored)
+```
+
+#### Template Files
+Safe template files are committed to Git:
+
+```
+.elementary_env.example    # Template with placeholder values
+.highschool_env.example    # Template with placeholder values
+```
+
+#### Git Protection
+The `.gitignore` file ensures sensitive files are never committed:
+
+```gitignore
+# Sensitive configuration and credentials
+credentials.json
+token.json
+.elementary_env
+.highschool_env
+*.env
+```
+
+### Setup Process
+
+1. **Copy Templates**:
+   ```bash
+   cp .elementary_env.example .elementary_env
+   cp .highschool_env.example .highschool_env
+   ```
+
+2. **Update Configuration**:
+   Edit the copied files with your actual values:
+   ```bash
+   # Update elementary school config
+   nano .elementary_env
+   
+   # Update high school config  
+   nano .highschool_env
+   ```
+
+3. **Validation**:
+   The wrapper scripts validate configuration on startup and check for placeholder values.
+
+### Security Checklist
+
+- ✅ **Environment files are git-ignored**
+- ✅ **Template files contain only placeholders**
+- ✅ **Scripts validate configuration on startup**
+- ✅ **No sensitive data in committed code**
+- ✅ **Google credentials stored separately**
+
+## 🚀 Usage
+
+### Simple Wrapper Scripts (Recommended)
+
+For common configurations, use the dedicated wrapper scripts:
 
 ```bash
-python lunch_menu_sync.py --calendar-id "ZmFtaWx5MTQ0NTE1NDA2MTA5NzQ3Nzg3OTFAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ"
+# Elementary school (NutriSlice API)
+./run_elementary_sync.sh -x          # Dry run
+./run_elementary_sync.sh -w 8        # Sync 8 weeks
+./run_elementary_sync.sh -s 2025-09-01  # Start from specific date
+
+# High school (FDMealPlanner API)  
+./run_highschool_sync.sh -x          # Dry run
+./run_highschool_sync.sh -w 8        # Sync 8 weeks
+./run_highschool_sync.sh -s 2025-09-01  # Start from specific date
+```
+
+**Important**: Before using the wrapper scripts, make sure you've set up the environment files with your actual calendar ID and API parameters.
+
+### Direct Command Line Usage
+
+```bash
+# NutriSlice API example
+python3 school_lunch_menu_google_calendar_sync.py \
+  -u "https://school.api.nutrislice.com/menu/api/weeks/school/district/menu-type/elementary" \
+  -c "your-calendar-id@group.calendar.google.com" \
+  -p "Elementary: " \
+  -o "grape" \
+  -w 4
+
+# FDMealPlanner API example  
+python3 school_lunch_menu_google_calendar_sync.py \
+  -u "https://api.fdmealplanner.com/api/v1/data-locator-webapi/4/meals" \
+  -c "your-calendar-id@group.calendar.google.com" \
+  -p "High School: " \
+  -o "peacock" \
+  -a "10091" -i "10320" -m "2" -e "4" \
+  -w 4
 ```
 
 ### Command Line Options
 
-```bash
-python lunch_menu_sync.py [OPTIONS]
+| Short | Long | Description | Default |
+|-------|------|-------------|---------|
+| `-u` | `--base-url` | Base URL for the menu API | *Required* |
+| `-c` | `--calendar-id` | Google Calendar ID | *Required unless dry-run* |
+| `-p` | `--event-prefix` | Event title prefix | `""` |
+| `-o` | `--event-color` | Calendar color name or ID | `grape` |
+| `-r` | `--credentials` | OAuth credentials file | `credentials.json` |
+| `-t` | `--token` | OAuth token file | `token.json` |
+| `-l` | `--log-level` | Logging level | `INFO` |
+| `-d` | `--log-dir` | Directory for log files | `None` |
+| `-n` | `--no-stdout` | Disable stdout logging | `False` |
+| `-w` | `--max-weeks` | Maximum weeks to check | `8` |
+| `-s` | `--start-date` | Start date (YYYY-MM-DD) | Today |
+| `-x` | `--dry-run` | Only collect menus, skip sync | `False` |
 
-Required:
-  --calendar-id TEXT        Google Calendar ID
+#### FDMealPlanner Specific Options
 
-Optional:
-  --credentials FILE        OAuth credentials file (default: credentials.json)
-  --token FILE             OAuth token file (default: token.json)
-  --log-level LEVEL        Logging level: DEBUG, VERBOSE, INFO, WARNING, ERROR (default: INFO)
-  --log-dir DIRECTORY      Directory for log files (optional)
-  --no-stdout              Disable stdout logging
-  --max-days INTEGER       Maximum days to check (default: 60)
-  --start-date YYYY-MM-DD  Start date (defaults to today)
+| Short | Long | Description |
+|-------|------|-------------|
+| `-a` | `--account-id` | FDMealPlanner account ID |
+| `-i` | `--location-id` | FDMealPlanner location ID |
+| `-m` | `--meal-period-id` | FDMealPlanner meal period ID |
+| `-e` | `--tenant-id` | FDMealPlanner tenant ID |
+
+## 📋 Enhanced Menu Features
+
+### Detailed Menu Descriptions
+
+Each calendar event now includes comprehensive menu details in the event description field:
+
+#### Elementary School Menus (NutriSlice)
+- **Format**: Simple "MENU ITEMS" header with bulleted list
+- **Content**: All menu items sorted by position (lowest to highest)
+- **Source**: `menu_items[x].food.name` field from API
+
+**Example:**
+```
+FRHL: Orange Chicken
+
+MENU ITEMS
+
+- Orange Chicken
+- WG Popcorn Chicken
+- Orange Sauce
+- Vegetable Fried Rice WG
+- Fresh Broccoli Bites
+- Seasonal Fruit
+- Fat Free Milk
+- Milk 1%, low fat, 8 fl oz.
+- Chocolate Low Fat Milk
+- Strawberry Milk
 ```
 
-### Examples
+#### High School Menus (FDMealPlanner)
+- **Format**: Category headers in ALL CAPS with organized sections
+- **Content**: Items sorted by sequence number, grouped by category
+- **Hierarchy**: Parent items with indented child items
+- **Source**: `englishAlternateName` (preferred) or `componentName`
 
-**Basic sync with INFO logging:**
-```bash
-python lunch_menu_sync.py --calendar-id "ZmFtaWx5MTQ0NTE1NDA2MTA5NzQ3Nzg3OTFAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ"
+**Example:**
+```
+LTHSS: Baked Potato Bar
+
+BAKED POTATO BAR
+
+- Baked Potato
+- Chili Con Carne
+- Broccoli, Florets, 1" inch (MTO)
+- Cheese Sauce, quick
+- Cheese, Monterey Jack, Shredded 4/5#
+- Bacon, crumbled, 1 Tbsp. (MTO)
+
+ENTREE
+
+- Cheese Pizza - 6 slice
+- Pepperoni Pizza - 6 slices
+- Fried Spicy Chicken Sandwich
+- Hamburger
+- Cheeseburger
+- Bosco Sticks - 6"
+
+SIDE
+
+- Red Grape Cup
+- Rice Krispie Treats
+- Quest Chocolate Chip Cookie
+- Fudge Brownies - Box Mix
 ```
 
-**Debug mode with file logging:**
-```bash
-python lunch_menu_sync.py \
-  --calendar-id "ZmFtaWx5MTQ0NTE1NDA2MTA5NzQ3Nzg3OTFAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ" \
-  --log-level DEBUG \
-  --log-dir /var/log/lunch-sync
+## ⚙️ Configuration
+
+### Calendar Colors
+
+The system supports named colors that map to Google Calendar color IDs:
+
+| Color Name | ID | Color Name | ID |
+|------------|----|------------|----|
+| lavender   | 1  | tangerine  | 6  |
+| sage       | 2  | peacock    | 7  |
+| grape      | 3  | graphite   | 8  |
+| flamingo   | 4  | blueberry  | 9  |
+| banana     | 5  | basil      | 10 |
+|            |    | tomato     | 11 |
+
+### Global Configuration
+
+The system uses centralized configuration in the `GlobalConfig` class:
+
+```python
+class GlobalConfig:
+    REQUEST_TIMEOUT = 10        # API request timeout (seconds)
+    MAX_RETRIES = 7            # Maximum retry attempts
+    RATE_LIMIT_DELAY = 1       # Delay between requests (seconds)
 ```
 
-**Start from specific date:**
+### Environment Configuration Files
+
+#### `.elementary_env`
 ```bash
-python lunch_menu_sync.py \
-  --calendar-id "ZmFtaWx5MTQ0NTE1NDA2MTA5NzQ3Nzg3OTFAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ" \
-  --start-date 2024-01-15
+CALENDAR_ID="your-actual-calendar-id@group.calendar.google.com"
+BASE_URL="https://justadashcatering.api.nutrislice.com/menu/api/weeks/school/lagrange-sd-102/menu-type/park-junior-high"
+EVENT_PREFIX="FRHL: "
+EVENT_COLOR="grape"
+MAX_WEEKS=4
 ```
 
-## Automated Scheduling
+#### `.highschool_env`
+```bash
+CALENDAR_ID="your-actual-calendar-id@group.calendar.google.com"
+BASE_URL="https://apiservicelocatorstenantquest.fdmealplanner.com/api/v1/data-locator-webapi/4/meals"
+EVENT_PREFIX="LTHSS: "
+EVENT_COLOR="peacock"
+MAX_WEEKS=4
 
-### Using Cron (Linux/macOS)
+# FDMealPlanner API Parameters
+ACCOUNT_ID="10091"
+LOCATION_ID="10320"
+MEAL_PERIOD_ID="2"
+TENANT_ID="4"
+```
 
-1. **Create a wrapper script** (recommended for environment setup):
+## 🚀 Deployment
 
-   Create `/usr/local/bin/lunch-sync.sh`:
+### Server Setup
+
+1. **Clone the repository**:
    ```bash
-   #!/bin/bash
-   cd /path/to/lunch-menu-sync
-   source venv/bin/activate  # if using virtual environment
-   python lunch_menu_sync.py \
-     --calendar-id "ZmFtaWx5MTQ0NTE1NDA2MTA5NzQ3Nzg3OTFAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ" \
-     --log-dir /var/log/lunch-sync \
-     --log-level INFO
+   git clone https://github.com/yourusername/D102-Lunch-Sync.git
+   cd D102-Lunch-Sync
    ```
 
-   Make it executable:
+2. **Set up Python virtual environment**:
    ```bash
-   chmod +x /usr/local/bin/lunch-sync.sh
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
    ```
 
-2. **Add cron job**:
+3. **Set up Google Calendar API credentials**:
+   - Follow the README instructions to get `credentials.json`
+   - Place it in the project directory
+   - Copy your working `token.json` from development environment
+
+4. **Configure environment files**:
    ```bash
-   crontab -e
+   cp .elementary_env.example .elementary_env
+   cp .highschool_env.example .highschool_env
+   # Edit with your actual values
    ```
 
-   Add this line to run daily at 7:00 AM:
+5. **Test the setup**:
    ```bash
-   0 7 * * * /usr/local/bin/lunch-sync.sh
+   ./run_elementary_sync.sh -x  # Test elementary
+   ./run_highschool_sync.sh -x  # Test high school
    ```
 
-### Using Windows Task Scheduler
+### Scheduled Execution
 
-1. Open Task Scheduler
-2. Create Basic Task
-3. Set trigger to "Daily" at your preferred time
-4. Set action to start the Python script with appropriate arguments
+#### Cronjob Setup
 
-## First Run Authorization
+```bash
+# Edit crontab
+crontab -e
 
-When you run the script for the first time:
+# Add entries for both menu types (runs at 11 PM daily)
+0 23 * * * cd /path/to/D102-Lunch-Sync && ./run_elementary_sync.sh
+30 23 * * * cd /path/to/D102-Lunch-Sync && ./run_highschool_sync.sh
+```
 
-1. A web browser will open asking you to sign in to Google
-2. Sign in with the account that has access to your Family calendar
-3. Grant permission to the application
-4. The browser will show "The authentication flow has completed"
-5. The script will save your authorization token for future runs
+#### GitHub Integration
 
-## How It Works
+```bash
+# Initial commit
+git add .
+git commit -m "Add lunch menu sync system"
+git push origin main
 
-### Menu Scraping Process
+# Server deployment
+git clone https://github.com/username/D102-Lunch-Sync.git
+cd D102-Lunch-Sync
+./run_elementary_sync.sh -x  # Test
+```
 
-1. **Date Iteration**: Starts from today and checks each weekday
-2. **URL Construction**: Builds URLs like `https://justadashcatering.nutrislice.com/menu/lagrange-sd-102/park-junior-high/2024-01-15`
-3. **HTML Parsing**: Looks for the first `div.menu-item-wrapper` element
-4. **Menu Extraction**: Gets the text from `span.food-name` within the wrapper
-5. **Stop Conditions**: 
-   - Finds `menus-empty-menu-day` element (menu not populated)
-   - 7 consecutive network failures
-   - Reaches maximum days limit
+### File Structure
+```
+D102-Lunch-Sync/
+├── school_lunch_menu_google_calendar_sync.py  # Main application
+├── run_elementary_sync.sh                     # Elementary wrapper script
+├── run_highschool_sync.sh                     # High school wrapper script
+├── .elementary_env                            # Elementary configuration (create from example)
+├── .highschool_env                            # High school configuration (create from example)
+├── .elementary_env.example                    # Elementary template
+├── .highschool_env.example                    # High school template
+├── requirements.txt                           # Python dependencies
+├── credentials.json                           # Google API credentials (you provide)
+├── token.json                                # OAuth token (auto-generated)
+├── venv/                                     # Python virtual environment
+└── logs/                                     # Log files
+    └── school_lunch_menu_google_calendar_sync_*.log  # Daily application logs
+```
 
-### Calendar Sync Process
-
-1. **Fetch Existing Events**: Gets all "FRHL:" prefixed events from the calendar
-2. **Compare and Update**: For each menu item:
-   - **No existing event**: Creates new event
-   - **Same event exists**: Skips (no action needed)
-   - **Different event exists**: Deletes old event and creates new one
-
-### Event Format
-
-- **Title**: "FRHL: [Menu Item]" (e.g., "FRHL: Orange Chicken")
-- **Type**: All-day event
-- **Color**: Grape (purple)
-- **Calendar**: Your Family calendar
-
-## Logging
-
-The script provides detailed logging with multiple levels:
-
-- **ERROR**: Critical errors that prevent operation
-- **WARNING**: Issues that don't stop execution
-- **INFO**: General operation information
-- **DEBUG**: Detailed debugging information
-- **VERBOSE**: Same as DEBUG (for compatibility)
-
-Log files are rotated daily and named with the date (e.g., `lunch_menu_sync_20240115.log`).
-
-## Troubleshooting
+## 🔧 Troubleshooting
 
 ### Common Issues
 
-**1. "Credentials file not found"**
-- Ensure `credentials.json` is in the script directory
-- Verify the file was downloaded from Google Cloud Console
-
-**2. "Calendar not found" or permission errors**
-- Verify the calendar ID is correct
-- Check that your Google account has edit access to the Family calendar
-- Try re-running the OAuth flow by deleting `token.json`
-
-**3. "Too many requests" errors**
-- The script includes rate limiting, but if you see this error, increase delays
-- Google Calendar API allows 1,000 requests per 100 seconds per user
-
-**4. Network timeouts**
-- Check your internet connection
-- The script retries failed requests up to 7 times
-- School website may be temporarily down
-
-**5. "No menu items found"**
-- The website structure may have changed
-- Enable DEBUG logging to see detailed HTML parsing information
-- Website may be showing a different layout
+1. **Missing Required Parameters**: Ensure all required parameters for your menu service are provided
+2. **Invalid URL**: Verify the URL matches a supported service pattern
+3. **Calendar 404 Errors**: Check that the calendar ID is correct and accessible
+4. **Environment File Errors**: Ensure `.env` files exist and contain valid configuration
+5. **API Rate Limits**: The system includes built-in rate limiting, but some services may have stricter limits
+6. **SSL Warnings**: These are suppressed automatically but indicate OpenSSL version compatibility issues
 
 ### Debug Mode
 
-Run with debug logging to see detailed information:
+Enable debug logging to see detailed operation information:
 
 ```bash
-python lunch_menu_sync.py \
-  --calendar-id "ZmFtaWx5MTQ0NTE1NDA2MTA5NzQ3Nzg3OTFAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ" \
-  --log-level DEBUG
+python3 school_lunch_menu_google_calendar_sync.py -u "..." -l DEBUG -x
 ```
 
-### Manual Testing
+This will show:
+- API request/response details
+- Menu parsing logic
+- Calendar event comparison
+- Error details and retry attempts
 
-Test the script with a specific date:
+### Testing Commands
 
 ```bash
-python lunch_menu_sync.py \
-  --calendar-id "ZmFtaWx5MTQ0NTE1NDA2MTA5NzQ3Nzg3OTFAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ" \
-  --start-date 2024-01-15 \
-  --max-days 5 \
-  --log-level DEBUG
+# Test elementary API only
+./run_elementary_sync.sh -x -w 1
+
+# Test high school API only  
+./run_highschool_sync.sh -x -w 1
+
+# Debug with verbose logging
+python3 school_lunch_menu_google_calendar_sync.py \
+  -u "https://school.nutrislice.com/..." \
+  -p "Test: " -o "grape" -x -l DEBUG
 ```
 
-## Rate Limits and API Quotas
+## 🔧 Extending the System
 
-### Google Calendar API Limits
+### Adding a New Menu Parser
 
-- **Per-user quota**: 1,000 requests per 100 seconds
-- **Per-minute quota**: Varies, but typically 60 requests per minute
-- **Daily quota**: 1,000,000 requests per day (more than sufficient)
+1. **Create Parser Class**:
+   ```python
+   class NewServiceParser(MenuParser):
+       def _validate_config(self):
+           # Validate required parameters
+           pass
+       
+       def collect_menus(self, start_date, max_weeks, logger, session):
+           # Implement menu collection logic
+           pass
+   ```
 
-The script implements conservative rate limiting (1 request per second) to stay well within these limits.
+2. **Update Factory**:
+   ```python
+   @staticmethod
+   def create_parser(base_url: str, **kwargs) -> MenuParser:
+       url_lower = base_url.lower()
+       
+       if 'newservice.com' in url_lower:
+           return NewServiceParser(base_url, **kwargs)
+       # ... existing conditions
+   ```
 
-### School Website Rate Limiting
+## 🤝 Contributing
 
-- **Request timeout**: 10 seconds per request
-- **Retry policy**: Up to 7 attempts per URL
-- **Request spacing**: 1 second between requests
-- **User-Agent**: Set to avoid being blocked as a bot
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new parsers
+4. Submit a pull request
 
-## Security Considerations
+When adding new menu service support:
+- Follow the existing parser pattern
+- Include comprehensive error handling
+- Add appropriate URL pattern matching
+- Document any required parameters
+- Test with dry-run mode first
 
-- **Credentials**: Keep `credentials.json` secure and don't share it
-- **Token**: The `token.json` file contains your access token - keep it private
-- **Permissions**: The script only requests calendar access, not full Google account access
+## 📄 License
 
-## Support
+MIT License - see LICENSE file for details.
+
+---
+
+## 📞 Support
 
 If you encounter issues:
 
 1. Check the troubleshooting section above
-2. Run with `--log-level DEBUG` to get detailed information
+2. Run with `-l DEBUG` to get detailed information
 3. Check the log files for specific error messages
 4. Verify your Google Cloud Console setup
-
-## License
+5. Ensure environment files are properly configured
 
 This script is provided as-is for personal use. Please respect the school website's terms of service and don't overload their servers with excessive requests.

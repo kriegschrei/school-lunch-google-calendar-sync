@@ -1,0 +1,14 @@
+# High School Menu Sync Configuration  
+# Copy this file to .highschool_env and update with your actual values
+
+CALENDAR_ID="YOUR_CALENDAR_ID_HERE"
+BASE_URL="https://apiservicelocatorstenantquest.fdmealplanner.com/api/v1/data-locator-webapi/4/meals"
+EVENT_PREFIX="LTS: "
+EVENT_COLOR="peacock"
+MAX_WEEKS=4
+
+# FDMealPlanner API Parameters
+ACCOUNT_ID="YOUR_ACCOUNT_ID_HERE"
+LOCATION_ID="YOUR_LOCATION_ID_HERE" 
+MEAL_PERIOD_ID="YOUR_MEAL_PERIOD_ID_HERE"
+TENANT_ID="YOUR_TENANT_ID_HERE"

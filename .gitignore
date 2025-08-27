@@ -2,6 +2,12 @@
 config.sh
 credentials.json
 token.json
+.elementary_env
+.highschool_env
+*.env
+
+# old files
+old/
 
 # Python virtual environment
 venv/
