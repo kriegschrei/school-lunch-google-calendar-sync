@@ -152,6 +152,7 @@ class MenuParser(ABC):
         Returns:
             Preferred name string
         """
+        logger.debug(f"item: {item}")
         english_name = item.get('englishAlternateName', '').strip()
         logger.debug(f"english_name: {english_name}")
         component_name = item.get('componentName', '').strip()
