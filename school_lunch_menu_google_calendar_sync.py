@@ -1012,15 +1012,14 @@ class GeneralLunchMenuSyncer:
         Returns:
             True if reminders match, False otherwise
         """
-        # If no expected reminders, check if existing reminders are also empty/default
+        # If no expected reminders, check if existing reminders are also disabled
         if not expected_reminders:
-            # Check if existing reminders are empty or use default
+            # Check if existing reminders are completely disabled
             if not existing_reminders:
                 return True
-            if existing_reminders.get('useDefault', True):
-                return True
-            # If useDefault is False but no overrides, that's also fine
-            if not existing_reminders.get('overrides'):
+            # For no reminders, we expect useDefault: false and empty overrides
+            if (existing_reminders.get('useDefault') == False and 
+                not existing_reminders.get('overrides')):
                 return True
             return False
         
@@ -1145,13 +1144,13 @@ class GeneralLunchMenuSyncer:
         if menu_details:
             event['description'] = menu_details
         
-        # Handle reminders - either set custom ones or remove all reminders
+        # Handle reminders - either set custom ones or disable all reminders
         reminders = self._create_reminders_array()
         if reminders:
             event['reminders'] = {'useDefault': False, 'overrides': reminders}
         else:
-            # No reminders configured - explicitly remove all reminders and use defaults
-            event['reminders'] = {'useDefault': True, 'overrides': []}
+            # No reminders configured - explicitly disable ALL reminders (including defaults)
+            event['reminders'] = {'useDefault': False, 'overrides': []}
         
         try:
             # Rate limiting for Google Calendar API
@@ -1199,13 +1198,13 @@ class GeneralLunchMenuSyncer:
         if menu_details:
             event['description'] = menu_details
         
-        # Handle reminders - either set custom ones or remove all reminders
+        # Handle reminders - either set custom ones or disable all reminders
         reminders = self._create_reminders_array()
         if reminders:
             event['reminders'] = {'useDefault': False, 'overrides': reminders}
         else:
-            # No reminders configured - explicitly remove all reminders and use defaults
-            event['reminders'] = {'useDefault': True, 'overrides': []}
+            # No reminders configured - explicitly disable ALL reminders (including defaults)
+            event['reminders'] = {'useDefault': False, 'overrides': []}
         
         try:
             # Rate limiting for Google Calendar API
