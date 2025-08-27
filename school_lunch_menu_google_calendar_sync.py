@@ -515,7 +515,7 @@ class FDMealPlannerParser(MenuParser):
             Tuple of (menu_title, menu_details) or None if no menu found
         """
         str_menu_date = day_data.get('strMenuForDate', 'unknown')
-        menu_recipes_data = day_data.get('menuRecipiesData', [])
+        menu_recipes_data = day_data.get('allMenuRecipes', [])
         
         if not menu_recipes_data:
             logger.debug(f"No menu recipe data for {str_menu_date}")
