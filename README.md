@@ -46,8 +46,8 @@ A flexible, general-purpose system for syncing lunch menus from various menu ser
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/D102-Lunch-Sync.git
-cd D102-Lunch-Sync
+git clone https://github.com/kriegschrei/school-lunch-google-calendar-sync.git
+cd school-lunch-google-calendar-sync
 ```
 
 ### 2. Set Up Virtual Environment
@@ -228,7 +228,7 @@ Each calendar event now includes comprehensive menu details in the event descrip
 
 **Example:**
 ```
-FRHL: Orange Chicken
+EL: Orange Chicken
 
 MENU ITEMS
 
@@ -252,7 +252,7 @@ MENU ITEMS
 
 **Example:**
 ```
-LTHSS: Baked Potato Bar
+HS: Baked Potato Bar
 
 BAKED POTATO BAR
 
@@ -312,7 +312,7 @@ class GlobalConfig:
 ```bash
 CALENDAR_ID="your-actual-calendar-id@group.calendar.google.com"
 BASE_URL="https://justadashcatering.api.nutrislice.com/menu/api/weeks/school/lagrange-sd-102/menu-type/park-junior-high"
-EVENT_PREFIX="FRHL: "
+EVENT_PREFIX="EL: "
 EVENT_COLOR="grape"
 MAX_WEEKS=4
 ```
@@ -321,7 +321,7 @@ MAX_WEEKS=4
 ```bash
 CALENDAR_ID="your-actual-calendar-id@group.calendar.google.com"
 BASE_URL="https://apiservicelocatorstenantquest.fdmealplanner.com/api/v1/data-locator-webapi/4/meals"
-EVENT_PREFIX="LTHSS: "
+EVENT_PREFIX="HS: "
 EVENT_COLOR="peacock"
 MAX_WEEKS=4
 
@@ -338,8 +338,8 @@ TENANT_ID="4"
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/yourusername/D102-Lunch-Sync.git
-   cd D102-Lunch-Sync
+   git clone https://github.com/kriegschrei/school-lunch-google-calendar-sync.git
+   cd school-lunch-google-calendar-sync
    ```
 
 2. **Set up Python virtual environment**:
