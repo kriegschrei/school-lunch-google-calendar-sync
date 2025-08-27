@@ -3,7 +3,7 @@
 
 CALENDAR_ID="YOUR_CALENDAR_ID_HERE"
 BASE_URL="https://apiservicelocatorstenantquest.fdmealplanner.com/api/v1/data-locator-webapi/4/meals"
-EVENT_PREFIX="LTS: "
+EVENT_PREFIX="HS: "
 EVENT_COLOR="peacock"
 MAX_WEEKS=4
 
