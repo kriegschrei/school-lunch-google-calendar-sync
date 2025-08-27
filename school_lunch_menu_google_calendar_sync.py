@@ -798,7 +798,7 @@ class GeneralLunchMenuSyncer:
                  event_color: str = "grape", credentials_file: str = "credentials.json", 
                  token_file: str = "token.json", log_level: str = "INFO",
                  log_dir: str = None, enable_stdout_logging: bool = True, 
-                 skip_auth: bool = False, **parser_config):
+                 skip_auth: bool = False, reminder: str = None, **parser_config):
         """
         Initialize the GeneralLunchMenuSyncer.
         
@@ -813,6 +813,7 @@ class GeneralLunchMenuSyncer:
             log_dir: Directory for log files (optional)
             enable_stdout_logging: Enable logging to stdout
             skip_auth: Skip Google Calendar authentication (for dry-run mode)
+            reminder: Reminder string in format "Xm", "Xh", or "Xd" (e.g., "15m", "1h", "1d")
             **parser_config: Additional configuration for parser
         """
         self.calendar_id = calendar_id
@@ -823,6 +824,7 @@ class GeneralLunchMenuSyncer:
         # Setup event configuration
         self.event_prefix = event_prefix
         self.event_color_id = self._resolve_color(event_color)
+        self.reminder = self._parse_reminder(reminder)
         
         # Setup logging
         self._setup_logging(log_level, log_dir, enable_stdout_logging)
@@ -849,6 +851,10 @@ class GeneralLunchMenuSyncer:
         
         self.logger.info("GeneralLunchMenuSyncer initialized successfully")
         self.logger.info(f"Event prefix: '{self.event_prefix}', Color ID: '{self.event_color_id}'")
+        if self.reminder:
+            self.logger.info(f"Reminder configured: {self.reminder}")
+        else:
+            self.logger.info("No reminders configured")
     
     def _resolve_color(self, color: str) -> str:
         """
@@ -928,6 +934,103 @@ class GeneralLunchMenuSyncer:
         
         self.calendar_service = build('calendar', 'v3', credentials=creds)
         self.logger.info("Google Calendar authentication successful")
+    
+    def _parse_reminder(self, reminder: Optional[str]) -> Optional[Dict[str, int]]:
+        """
+        Parse a reminder string (e.g., "15m", "1h", "1d") into a dictionary.
+        
+        Args:
+            reminder: Reminder string (e.g., "15m", "1h", "1d")
+            
+        Returns:
+            Dictionary with keys 'minutes', 'hours', 'days' or None if no reminder
+        """
+        if not reminder:
+            return None
+        
+        reminder_lower = reminder.lower()
+        if 'm' in reminder_lower:
+            minutes = int(reminder_lower.replace('m', ''))
+            return {'minutes': minutes}
+        elif 'h' in reminder_lower:
+            hours = int(reminder_lower.replace('h', ''))
+            return {'hours': hours}
+        elif 'd' in reminder_lower:
+            days = int(reminder_lower.replace('d', ''))
+            return {'days': days}
+        else:
+            self.logger.warning(f"Invalid reminder format: {reminder}. Expected 'Xm', 'Xh', or 'Xd'.")
+            return None
+    
+    def _create_reminders_array(self) -> Optional[List[Dict[str, str]]]:
+        """
+        Create the reminders array for Google Calendar events.
+        
+        Returns:
+            List of reminder dictionaries or None if no reminders
+        """
+        if not self.reminder:
+            return None
+        
+        reminders = []
+        
+        if 'minutes' in self.reminder:
+            reminders.append({
+                'method': 'popup',
+                'minutes': self.reminder['minutes']
+            })
+        elif 'hours' in self.reminder:
+            reminders.append({
+                'method': 'popup',
+                'minutes': self.reminder['hours'] * 60
+            })
+        elif 'days' in self.reminder:
+            reminders.append({
+                'method': 'popup',
+                'minutes': self.reminder['days'] * 24 * 60
+            })
+        
+        return reminders if reminders else None
+    
+    def _reminders_match(self, existing_reminders: Dict, expected_reminders: Optional[List[Dict[str, str]]]) -> bool:
+        """
+        Check if existing reminders match expected reminders.
+        
+        Args:
+            existing_reminders: Existing reminders from Google Calendar event
+            expected_reminders: Expected reminders configuration
+            
+        Returns:
+            True if reminders match, False otherwise
+        """
+        # If no expected reminders, check if existing reminders are also empty/default
+        if not expected_reminders:
+            # Check if existing reminders are empty or use default
+            if not existing_reminders:
+                return True
+            if existing_reminders.get('useDefault', True):
+                return True
+            # If useDefault is False but no overrides, that's also fine
+            if not existing_reminders.get('overrides'):
+                return True
+            return False
+        
+        # If we expect reminders but existing ones don't match
+        if not existing_reminders:
+            return False
+        
+        existing_overrides = existing_reminders.get('overrides', [])
+        if len(existing_overrides) != len(expected_reminders):
+            return False
+        
+        # Compare each reminder
+        for i, expected in enumerate(expected_reminders):
+            existing = existing_overrides[i]
+            if (existing.get('method') != expected.get('method') or
+                existing.get('minutes') != expected.get('minutes')):
+                return False
+        
+        return True
     
     def collect_menus(self, start_date: datetime = None, max_weeks: int = 8) -> List[Tuple[datetime, str, str]]:
         """
@@ -1033,6 +1136,11 @@ class GeneralLunchMenuSyncer:
         if menu_details:
             event['description'] = menu_details
         
+        # Add reminders if configured
+        reminders = self._create_reminders_array()
+        if reminders:
+            event['reminders'] = {'useDefault': False, 'overrides': reminders}
+        
         try:
             # Rate limiting for Google Calendar API
             time.sleep(GlobalConfig.RATE_LIMIT_DELAY)
@@ -1078,6 +1186,11 @@ class GeneralLunchMenuSyncer:
         # Add description if menu details are provided
         if menu_details:
             event['description'] = menu_details
+        
+        # Add reminders if configured
+        reminders = self._create_reminders_array()
+        if reminders:
+            event['reminders'] = {'useDefault': False, 'overrides': reminders}
         
         try:
             # Rate limiting for Google Calendar API
@@ -1133,12 +1246,26 @@ class GeneralLunchMenuSyncer:
                 existing_color = existing_event.get('colorId', '')
                 existing_description = existing_event.get('description', '')
                 
-                # Check if title, color, or description needs updating
+                # Check start and end dates
+                existing_start = existing_event.get('start', {}).get('date', '')
+                existing_end = existing_event.get('end', {}).get('date', '')
+                expected_start = date.strftime('%Y-%m-%d')
+                expected_end = (date + timedelta(days=1)).strftime('%Y-%m-%d')  # For all-day events, end date = start date + 1 day
+                
+                # Check reminders
+                existing_reminders = existing_event.get('reminders', {})
+                expected_reminders = self._create_reminders_array()
+                
+                # Check if any field needs updating
                 title_matches = existing_title == expected_title
                 color_matches = existing_color == self.event_color_id
                 description_matches = existing_description == menu_details
+                start_matches = existing_start == expected_start
+                end_matches = existing_end == expected_end
+                reminders_match = self._reminders_match(existing_reminders, expected_reminders)
                 
-                if title_matches and color_matches and description_matches:
+                if (title_matches and color_matches and description_matches and 
+                    start_matches and end_matches and reminders_match):
                     self.logger.debug(f"Event already exists and matches for {date_str}")
                     stats['skipped'] += 1
                 else:
@@ -1150,6 +1277,12 @@ class GeneralLunchMenuSyncer:
                         changes.append(f"color: '{existing_color}' -> '{self.event_color_id}'")
                     if not description_matches:
                         changes.append("description updated")
+                    if not start_matches:
+                        changes.append(f"start date: '{existing_start}' -> '{expected_start}'")
+                    if not end_matches:
+                        changes.append(f"end date: '{existing_end}' -> '{expected_end}'")
+                    if not reminders_match:
+                        changes.append("reminders updated")
                     
                     self.logger.info(f"Updating event for {date_str}: {', '.join(changes)}")
                     
@@ -1212,6 +1345,7 @@ def main():
     parser.add_argument('-w', '--max-weeks', type=int, default=8, help='Maximum weeks to check')
     parser.add_argument('-s', '--start-date', help='Start date (YYYY-MM-DD), defaults to today')
     parser.add_argument('-x', '--dry-run', action='store_true', help='Only collect menus, skip calendar sync')
+    parser.add_argument('--reminder', help='Reminder in format "Xm", "Xh", or "Xd" (e.g., "15m", "1h", "1d")')
     
     # FDMealPlanner specific arguments
     parser.add_argument('-a', '--account-id', help='FDMealPlanner account ID')
@@ -1285,6 +1419,7 @@ def main():
                 log_dir=args.log_dir,
                 enable_stdout_logging=not args.no_stdout,
                 skip_auth=True,  # Skip Google Calendar authentication
+                reminder=args.reminder,
                 **parser_config
             )
             
@@ -1314,6 +1449,7 @@ def main():
                 log_level=args.log_level,
                 log_dir=args.log_dir,
                 enable_stdout_logging=not args.no_stdout,
+                reminder=args.reminder,
                 **parser_config
             )
             
