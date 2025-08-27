@@ -141,6 +141,28 @@ class MenuParser(ABC):
         
         return result.strip()
     
+    def _get_preferred_name(self, item: Dict, default_name: str = "Unknown Item") -> str:
+        """
+        Get the preferred name from a menu item, preferring englishAlternateName over componentName.
+        
+        Args:
+            item: Menu item dictionary
+            default_name: Default name to return if no valid names found
+            
+        Returns:
+            Preferred name string
+        """
+        english_name = item.get('englishAlternateName', '').strip()
+        component_name = item.get('componentName', '').strip()
+        
+        # Prefer englishAlternateName if it exists and is not "N/A"
+        if english_name and english_name.lower() != 'n/a':
+            return english_name
+        elif component_name:
+            return component_name
+        else:
+            return default_name
+    
     @abstractmethod
     def _validate_config(self):
         """Validate parser-specific configuration."""
@@ -978,28 +1000,6 @@ class GeneralLunchMenuSyncer:
             })
         
         return reminders if reminders else None
-    
-    def _get_preferred_name(self, item: Dict, default_name: str = "Unknown Item") -> str:
-        """
-        Get the preferred name from a menu item, preferring englishAlternateName over componentName.
-        
-        Args:
-            item: Menu item dictionary
-            default_name: Default name to return if no valid names found
-            
-        Returns:
-            Preferred name string
-        """
-        english_name = item.get('englishAlternateName', '').strip()
-        component_name = item.get('componentName', '').strip()
-        
-        # Prefer englishAlternateName if it exists and is not "N/A"
-        if english_name and english_name.lower() != 'n/a':
-            return english_name
-        elif component_name:
-            return component_name
-        else:
-            return default_name
     
     def _reminders_match(self, existing_reminders: Dict, expected_reminders: Optional[List[Dict[str, str]]]) -> bool:
         """
