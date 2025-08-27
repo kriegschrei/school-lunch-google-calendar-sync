@@ -636,15 +636,8 @@ class FDMealPlannerParser(MenuParser):
             description_lines.append(category.upper())
             
             for item in items:
-                # Get item name (prefer englishAlternateName, then componentName)
-                english_name = item.get('englishAlternateName', '').strip()
-                component_name = item.get('componentName', '').strip()
-                
-                # Skip items with "N/A" or empty englishAlternateName
-                if english_name and english_name.lower() != 'n/a':
-                    item_name = english_name
-                else:
-                    item_name = component_name
+                # Get preferred item name
+                item_name = self._get_preferred_name(item)
                 
                 if item_name:
                     cleaned_item_name = self._apply_text_replacements(item_name)
@@ -654,14 +647,8 @@ class FDMealPlannerParser(MenuParser):
                     component_id = item.get('componentId')
                     if component_id in child_items:
                         for child in child_items[component_id]:
-                            child_english = child.get('englishAlternateName', '').strip()
-                            child_component = child.get('componentName', '').strip()
-                            
-                            # Skip items with "N/A" or empty englishAlternateName
-                            if child_english and child_english.lower() != 'n/a':
-                                child_name = child_english
-                            else:
-                                child_name = child_component
+                            # Get preferred child item name
+                            child_name = self._get_preferred_name(child)
                             
                             if child_name:
                                 cleaned_child_name = self._apply_text_replacements(child_name)
@@ -991,6 +978,28 @@ class GeneralLunchMenuSyncer:
             })
         
         return reminders if reminders else None
+    
+    def _get_preferred_name(self, item: Dict, default_name: str = "Unknown Item") -> str:
+        """
+        Get the preferred name from a menu item, preferring englishAlternateName over componentName.
+        
+        Args:
+            item: Menu item dictionary
+            default_name: Default name to return if no valid names found
+            
+        Returns:
+            Preferred name string
+        """
+        english_name = item.get('englishAlternateName', '').strip()
+        component_name = item.get('componentName', '').strip()
+        
+        # Prefer englishAlternateName if it exists and is not "N/A"
+        if english_name and english_name.lower() != 'n/a':
+            return english_name
+        elif component_name:
+            return component_name
+        else:
+            return default_name
     
     def _reminders_match(self, existing_reminders: Dict, expected_reminders: Optional[List[Dict[str, str]]]) -> bool:
         """
