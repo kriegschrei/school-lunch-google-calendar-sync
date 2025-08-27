@@ -1145,10 +1145,13 @@ class GeneralLunchMenuSyncer:
         if menu_details:
             event['description'] = menu_details
         
-        # Add reminders if configured
+        # Handle reminders - either set custom ones or use defaults
         reminders = self._create_reminders_array()
         if reminders:
             event['reminders'] = {'useDefault': False, 'overrides': reminders}
+        else:
+            # No reminders configured - use calendar defaults
+            event['reminders'] = {'useDefault': True}
         
         try:
             # Rate limiting for Google Calendar API
@@ -1196,10 +1199,13 @@ class GeneralLunchMenuSyncer:
         if menu_details:
             event['description'] = menu_details
         
-        # Add reminders if configured
+        # Handle reminders - either set custom ones or use defaults
         reminders = self._create_reminders_array()
         if reminders:
             event['reminders'] = {'useDefault': False, 'overrides': reminders}
+        else:
+            # No reminders configured - use calendar defaults
+            event['reminders'] = {'useDefault': True}
         
         try:
             # Rate limiting for Google Calendar API
