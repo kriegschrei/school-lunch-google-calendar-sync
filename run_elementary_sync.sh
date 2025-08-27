@@ -2,7 +2,7 @@
 # Elementary School Lunch Menu Sync (NutriSlice API)
 
 # Set working directory
-cd /Users/jpohl/git/personal/D102-Lunch-Sync
+cd /path/to/script
 
 # Activate virtual environment
 source ./venv/bin/activate
