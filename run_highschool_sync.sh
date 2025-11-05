@@ -28,7 +28,6 @@ if [ "$ACCOUNT_ID" = "YOUR_ACCOUNT_ID_HERE" ]; then
 fi
 
 # Execute the sync
-python3 school_lunch_menu_google_calendar_sync.py \
   -u "$BASE_URL" \
   -c "$CALENDAR_ID" \
   -p "$EVENT_PREFIX" \
@@ -40,4 +39,5 @@ python3 school_lunch_menu_google_calendar_sync.py \
   -l INFO \
   -d ./logs \
   -w "$MAX_WEEKS" \
+  --service-account-file  "d102-lunch-sync-853b892803c6.json" \
   "$@"

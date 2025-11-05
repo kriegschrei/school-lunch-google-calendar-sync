@@ -5,6 +5,7 @@ token.json
 .elementary_env
 .highschool_env
 *.env
+*.json
 
 # old files
 old/

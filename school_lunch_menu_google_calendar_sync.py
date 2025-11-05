@@ -14,6 +14,8 @@ import logging
 import argparse
 import time
 import re
+import json
+import base64
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Tuple, Type
 from calendar import monthrange
@@ -28,8 +30,10 @@ import requests
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.errors import HttpError
+from google.auth.exceptions import RefreshError
 
 import urllib3
 urllib3.disable_warnings()
@@ -240,6 +244,8 @@ class NutriSliceMenuParser(MenuParser):
                 logger.warning(f"Request error for weekly data {sunday_date.strftime('%Y-%m-%d')}, attempt {attempt + 1}/{GlobalConfig.MAX_RETRIES}: {e}")
             except ValueError as e:
                 logger.warning(f"JSON decode error for weekly data {sunday_date.strftime('%Y-%m-%d')}, attempt {attempt + 1}/{GlobalConfig.MAX_RETRIES}: {e}")
+                if hasattr(response, 'text'):
+                    logger.debug(f"Response content: {response.text[:500]}")  # Log first 500 chars
             
             if attempt < GlobalConfig.MAX_RETRIES - 1:
                 time.sleep(GlobalConfig.RATE_LIMIT_DELAY)
@@ -411,6 +417,8 @@ class NutriSliceMenuParser(MenuParser):
 
 class FDMealPlannerParser(MenuParser):
     """Parser for FDMealPlanner menu APIs."""
+    # Default client key used to obtain FDMealPlanner bearer tokens if none is provided
+    DEFAULT_CLIENT_KEY = "D4qSnj2SJXF2EEWw6tcxKG8oTvhtZ72moLq93YSARSvbUbBBgbDQ2DPngDFM3lh5"
     
     def _validate_config(self):
         """Validate FDMealPlanner-specific configuration."""
@@ -421,7 +429,7 @@ class FDMealPlannerParser(MenuParser):
         if not url_valid:
             raise ValueError(f"Invalid FDMealPlanner URL: {self.base_url}")
         
-        # Check for required parameters
+        # Check for required parameters (client_key will be defaulted if omitted)
         required_params = ['account_id', 'location_id', 'meal_period_id', 'tenant_id']
         missing_params = []
         
@@ -432,11 +440,121 @@ class FDMealPlannerParser(MenuParser):
         if missing_params:
             raise ValueError(f"Missing required FDMealPlanner parameters: {missing_params}. "
                            f"Please provide: {', '.join(required_params)}")
+        
+        # Default the client_key if not provided
+        if 'client_key' not in self.config or not self.config['client_key']:
+            self.config['client_key'] = FDMealPlannerParser.DEFAULT_CLIENT_KEY
     
     def _is_weekend(self, date: datetime) -> bool:
         """Check if the given date is a weekend."""
         return date.weekday() >= 5  # Saturday=5, Sunday=6
     
+    def _parse_jwt_exp(self, token: str, logger: logging.Logger) -> int:
+        """Parse a JWT and return the exp (epoch seconds) or 0 on failure."""
+        try:
+            parts = token.split('.')
+            if len(parts) < 2:
+                return 0
+            payload_b64 = parts[1]
+            # Fix missing padding
+            padding = '=' * (-len(payload_b64) % 4)
+            payload_json = base64.urlsafe_b64decode(payload_b64 + padding).decode('utf-8')
+            payload = json.loads(payload_json)
+            return int(payload.get('exp', 0))
+        except Exception as e:
+            logger.warning(f"Failed to parse JWT exp: {e}")
+            return 0
+
+    def _get_access_token(self, logger: logging.Logger, session: requests.Session) -> str:
+        """Fetch and cache the FDMealPlanner bearer token using the client_key."""
+        # Lazy init cache fields
+        if not hasattr(self, '_access_token'):
+            self._access_token = None
+            self._token_expiry_epoch = 0
+
+        now = int(time.time())
+        if self._access_token and now < self._token_expiry_epoch:
+            return self._access_token
+
+        client_key = self.config['client_key']
+        token_url = f"https://users.fdmealplanner.com/api/v1/token-data/{client_key}/token"
+
+        logger.debug(f"Requesting FDMealPlanner access token from: {token_url}")
+        # Add headers that the API might expect
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json',
+            'Referer': 'https://fdmealplanner.com/',
+            'Origin': 'https://fdmealplanner.com'
+        }
+        
+        logger.debug(f"Token request headers: {headers}")
+        
+        for attempt in range(GlobalConfig.MAX_RETRIES):
+            try:
+                # Use POST with proper SecureRequestViewModel structure
+                # RequestId and Key appear to be timestamps in milliseconds
+                timestamp_ms = int(time.time() * 1000)
+                
+                # Inner MessageJson structure
+                message_json = {
+                    'Key': timestamp_ms + 4,  # Slightly offset from RequestId
+                    'clientKey': client_key,
+                    'clientSecretKey': 'FuzuaYdy4XUJh9UPW9Wh9dQ9mMuAHDfDfQeWfBJPJbmqR3MLpIkjiLY2IhnfAqLl',
+                    'deviceType': 'MealPlanner-Web',
+                    '__moduleId__': 'modules/plannerManagement/viewmodels/anonymousTokenRequestViewModel'
+                }
+                
+                # Outer SecureRequestViewModel structure
+                payload = {
+                    'RequestId': timestamp_ms,
+                    'MessageJson': json.dumps(message_json),
+                    'IsSecureData': False,
+                    'IsAnonymousUser': True,
+                    '__moduleId__': 'modules/plannerManagement/viewmodels/secureRequestViewModel'
+                }
+                
+                logger.debug(f"Making POST request to token endpoint (attempt {attempt + 1})")
+                logger.debug(f"Request payload: {payload}")
+                resp = session.post(token_url, json=payload, headers=headers, timeout=GlobalConfig.REQUEST_TIMEOUT)
+                
+                logger.debug(f"Token response status code: {resp.status_code}")
+                logger.debug(f"Token response headers: {dict(resp.headers)}")
+                logger.debug(f"Token response body (first 500 chars): {resp.text[:500]}")
+                
+                resp.raise_for_status()
+                data = resp.json()
+                token = data.get('data', {}).get('accessToken')
+                if not token:
+                    raise ValueError("Token response missing accessToken")
+
+                exp_epoch = self._parse_jwt_exp(token, logger)
+                # Add small skew margin to avoid using near-expiry tokens
+                if exp_epoch > 0:
+                    self._token_expiry_epoch = max(0, exp_epoch - 60)
+                else:
+                    # Fallback: cache for 20 minutes if exp not parsable
+                    self._token_expiry_epoch = now + 20 * 60
+
+                self._access_token = token
+                logger.debug("Successfully obtained FDMealPlanner access token")
+                return token
+            except requests.exceptions.Timeout:
+                logger.warning(f"Timeout fetching access token, attempt {attempt + 1}/{GlobalConfig.MAX_RETRIES}")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Request error fetching access token, attempt {attempt + 1}/{GlobalConfig.MAX_RETRIES}: {e}")
+                if hasattr(e, 'response') and e.response is not None:
+                    logger.debug(f"Error response status: {e.response.status_code}")
+                    logger.debug(f"Error response body: {e.response.text[:1000]}")
+            except ValueError as e:
+                logger.warning(f"Invalid token response, attempt {attempt + 1}/{GlobalConfig.MAX_RETRIES}: {e}")
+
+            if attempt < GlobalConfig.MAX_RETRIES - 1:
+                time.sleep(GlobalConfig.RATE_LIMIT_DELAY)
+
+        logger.fatal("Failed to obtain FDMealPlanner access token after retries")
+        sys.exit(1)
+
     def _get_monthly_menu_data(self, year: int, month: int, logger: logging.Logger, session: requests.Session) -> Optional[Dict]:
         """
         Fetch monthly menu data from FDMealPlanner API.
@@ -478,7 +596,10 @@ class FDMealPlannerParser(MenuParser):
         
         for attempt in range(GlobalConfig.MAX_RETRIES):
             try:
-                response = session.get(self.base_url, params=params, timeout=GlobalConfig.REQUEST_TIMEOUT)
+                # Ensure we have a valid bearer token
+                access_token = self._get_access_token(logger, session)
+                headers = {'Authorization': f'Bearer {access_token}'}
+                response = session.get(self.base_url, params=params, headers=headers, timeout=GlobalConfig.REQUEST_TIMEOUT)
                 response.raise_for_status()
                 
                 json_data = response.json()
@@ -807,7 +928,8 @@ class GeneralLunchMenuSyncer:
                  event_color: str = "grape", credentials_file: str = "credentials.json", 
                  token_file: str = "token.json", log_level: str = "INFO",
                  log_dir: str = None, enable_stdout_logging: bool = True, 
-                 skip_auth: bool = False, reminder: str = None, **parser_config):
+                 skip_auth: bool = False, reminder: str = None, 
+                 service_account_file: str = None, **parser_config):
         """
         Initialize the GeneralLunchMenuSyncer.
         
@@ -829,6 +951,7 @@ class GeneralLunchMenuSyncer:
         self.base_url = base_url
         self.credentials_file = credentials_file
         self.token_file = token_file
+        self.service_account_file = service_account_file
         
         # Setup event configuration
         self.event_prefix = event_prefix
@@ -916,30 +1039,65 @@ class GeneralLunchMenuSyncer:
             self.logger.addHandler(file_handler)
     
     def _authenticate(self):
-        """Authenticate with Google Calendar API."""
+        """Authenticate with Google Calendar API using either service account or OAuth."""
         creds = None
         
-        # Load existing token
-        if os.path.exists(self.token_file):
-            creds = Credentials.from_authorized_user_file(self.token_file, GlobalConfig.SCOPES)
-        
-        # If no valid credentials, get new ones
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                self.logger.info("Refreshing expired credentials")
-                creds.refresh(Request())
-            else:
-                self.logger.info("Starting new OAuth flow")
-                if not os.path.exists(self.credentials_file):
-                    raise FileNotFoundError(f"Credentials file not found: {self.credentials_file}")
-                
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    self.credentials_file, GlobalConfig.SCOPES)
-                creds = flow.run_local_server(port=0)
+        # Check if using service account
+        if self.service_account_file:
+            self.logger.info(f"Using service account authentication from {self.service_account_file}")
+            if not os.path.exists(self.service_account_file):
+                raise FileNotFoundError(f"Service account file not found: {self.service_account_file}")
             
-            # Save credentials for next run
-            with open(self.token_file, 'w') as token:
-                token.write(creds.to_json())
+            try:
+                creds = service_account.Credentials.from_service_account_file(
+                    self.service_account_file,
+                    scopes=GlobalConfig.SCOPES
+                )
+                self.logger.info("Service account authentication successful")
+            except Exception as e:
+                raise ValueError(f"Failed to load service account credentials: {e}")
+        else:
+            # Use OAuth flow
+            self.logger.info("Using OAuth authentication")
+            
+            # Load existing token
+            if os.path.exists(self.token_file):
+                try:
+                    creds = Credentials.from_authorized_user_file(self.token_file, GlobalConfig.SCOPES)
+                except (ValueError, KeyError) as e:
+                    self.logger.warning(f"Failed to load token file ({e}), will perform new OAuth flow")
+                    creds = None
+            
+            # If no valid credentials, get new ones
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    self.logger.info("Refreshing expired Google Calendar credentials")
+                    try:
+                        creds.refresh(Request())
+                    except RefreshError as e:
+                        # invalid_grant or other refresh failures: fall back to full OAuth flow
+                        self.logger.warning(f"Refresh failed ({e}), starting new OAuth flow")
+                        creds = None
+                    except Exception as e:
+                        # Catch any other errors (including JSON parsing errors)
+                        self.logger.warning(f"Unexpected error during refresh ({e}), starting new OAuth flow")
+                        creds = None
+                
+                # Need new credentials
+                if not creds:
+                    self.logger.info("Starting new OAuth flow")
+                    self.logger.info(f"Please delete {self.token_file} and re-run if you need to re-authenticate")
+                    if not os.path.exists(self.credentials_file):
+                        raise FileNotFoundError(f"Credentials file not found: {self.credentials_file}")
+                    
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        self.credentials_file, GlobalConfig.SCOPES)
+                    # Ensure we request a refresh token reliably
+                    creds = flow.run_local_server(port=0, access_type='offline', prompt='consent')
+                
+                # Save credentials for next run
+                with open(self.token_file, 'w') as token:
+                    token.write(creds.to_json())
         
         self.calendar_service = build('calendar', 'v3', credentials=creds)
         self.logger.info("Google Calendar authentication successful")
@@ -1351,6 +1509,7 @@ def main():
     parser.add_argument('-o', '--event-color', default='grape', help='Google Calendar color name or ID')
     parser.add_argument('-r', '--credentials', default='credentials.json', help='OAuth credentials file')
     parser.add_argument('-t', '--token', default='token.json', help='OAuth token file')
+    parser.add_argument('--service-account-file', help='Service account JSON file (for headless environments)')
     parser.add_argument('-l', '--log-level', default='INFO', 
                        choices=['DEBUG', 'VERBOSE', 'INFO', 'WARNING', 'ERROR'],
                        help='Logging level')
@@ -1366,6 +1525,7 @@ def main():
     parser.add_argument('-i', '--location-id', help='FDMealPlanner location ID')
     parser.add_argument('-m', '--meal-period-id', help='FDMealPlanner meal period ID')
     parser.add_argument('-e', '--tenant-id', help='FDMealPlanner tenant ID')
+    parser.add_argument('-k', '--client-key', help='FDMealPlanner client key used to obtain a bearer token')
     
     # Text replacement arguments
     parser.add_argument('-R', '--text-replacements', action='append', 
@@ -1398,6 +1558,8 @@ def main():
         parser_config['meal_period_id'] = args.meal_period_id
     if args.tenant_id:
         parser_config['tenant_id'] = args.tenant_id
+    if args.client_key:
+        parser_config['client_key'] = args.client_key
     
     # Handle text replacements
     text_replacements = []
@@ -1434,6 +1596,7 @@ def main():
                 enable_stdout_logging=not args.no_stdout,
                 skip_auth=True,  # Skip Google Calendar authentication
                 reminder=args.reminder,
+                service_account_file=args.service_account_file,
                 **parser_config
             )
             
@@ -1464,6 +1627,7 @@ def main():
                 log_dir=args.log_dir,
                 enable_stdout_logging=not args.no_stdout,
                 reminder=args.reminder,
+                service_account_file=args.service_account_file,
                 **parser_config
             )
             
