@@ -1066,6 +1066,12 @@ class GeneralLunchMenuSyncer:
                     creds = Credentials.from_authorized_user_file(self.token_file, GlobalConfig.SCOPES)
                 except (ValueError, KeyError) as e:
                     self.logger.warning(f"Failed to load token file ({e}), will perform new OAuth flow")
+                    # Delete corrupted token file
+                    try:
+                        os.remove(self.token_file)
+                        self.logger.info(f"Deleted corrupted token file: {self.token_file}")
+                    except Exception as del_error:
+                        self.logger.warning(f"Could not delete token file: {del_error}")
                     creds = None
             
             # If no valid credentials, get new ones
@@ -1074,19 +1080,25 @@ class GeneralLunchMenuSyncer:
                     self.logger.info("Refreshing expired Google Calendar credentials")
                     try:
                         creds.refresh(Request())
-                    except RefreshError as e:
-                        # invalid_grant or other refresh failures: fall back to full OAuth flow
-                        self.logger.warning(f"Refresh failed ({e}), starting new OAuth flow")
-                        creds = None
-                    except Exception as e:
-                        # Catch any other errors (including JSON parsing errors)
-                        self.logger.warning(f"Unexpected error during refresh ({e}), starting new OAuth flow")
-                        creds = None
+                    except (RefreshError, Exception) as e:
+                        # Check if it's an invalid_grant error
+                        error_str = str(e)
+                        if 'invalid_grant' in error_str.lower():
+                            self.logger.warning(f"Refresh token invalid ({e}). Deleting token file and starting new OAuth flow.")
+                            # Delete the invalid token file
+                            try:
+                                os.remove(self.token_file)
+                                self.logger.info(f"Deleted invalid token file: {self.token_file}")
+                            except Exception as del_error:
+                                self.logger.warning(f"Could not delete token file: {del_error}")
+                            creds = None
+                        else:
+                            self.logger.warning(f"Refresh failed ({e}), starting new OAuth flow")
+                            creds = None
                 
                 # Need new credentials
                 if not creds:
                     self.logger.info("Starting new OAuth flow")
-                    self.logger.info(f"Please delete {self.token_file} and re-run if you need to re-authenticate")
                     if not os.path.exists(self.credentials_file):
                         raise FileNotFoundError(f"Credentials file not found: {self.credentials_file}")
                     
